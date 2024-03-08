@@ -36,7 +36,7 @@ void aplicarFiltroDesenfoque(int** imagen_original, int altura, int ancho, int i
                         suma += resultado[i + m - 1][j + n - 1] * kernelData[m][n];
                     }
                 }
-                temp[i][j] = static_cast<int>(suma / 9);  // Normalizar el resultado
+                temp[i][j] = (int)(suma / 9);  // Normalizar el resultado
             }
         }
 
