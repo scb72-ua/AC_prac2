@@ -30,13 +30,13 @@ void aplicarFiltroDesenfoque(int** imagen_original, int altura, int ancho, int i
 
         for (int i = 1; i < altura - 1; i++) {
             for (int j = 1; j < ancho - 1; j++) {
-                float suma = 0.0;
+                int suma = 0;
                 for (int m = 0; m < 3; m++) {
                     for (int n = 0; n < 3; n++) {
                         suma += resultado[i + m - 1][j + n - 1] * kernelData[m][n];
                     }
                 }
-                temp[i][j] = (int)(suma / 9);  // Normalizar el resultado
+                temp[i][j] = (suma / 9);  // Normalizar el resultado
             }
         }
 
