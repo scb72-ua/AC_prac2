@@ -142,8 +142,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Prueba.cpp" />
     <ClCompile Include="Prueba2.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="imagen.JPG" />
+    <Image Include="imagen2.jpg" />
+    <Image Include="imagen3.JPG" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
