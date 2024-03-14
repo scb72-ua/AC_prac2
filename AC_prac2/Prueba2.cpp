@@ -1,5 +1,4 @@
 #include <iostream>
-#include <vector>
 #include <chrono>
 #include <opencv2/opencv.hpp>
 
@@ -24,13 +23,9 @@ int** cargarImagen(const std::string& ruta) {
     return imagen_array;
 }
 
-int** aplicarFiltro(int** imagen_original, int iteraciones_totales, float kernelData[3][3]) {
-    int** resultado = new int* [altura];
-
+void aplicarFiltro(int** imagen_original, int** resultado, int iteraciones_totales, int kernelData[3][3]) {
     // Copiar la imagen original al resultado
     for (int i = 0; i < altura; i++) {
-        resultado[i] = new int[ancho];
-
         for (int j = 0; j < ancho; j++) {
             resultado[i][j] = imagen_original[i][j];
         }
@@ -64,15 +59,13 @@ int** aplicarFiltro(int** imagen_original, int iteraciones_totales, float kernel
             }
         }
 
-
     }
+
     // Liberar memoria de la matriz temporal
     for (int i = 0; i < altura; i++) {
         delete[] temp[i];
     }
     delete[] temp;
-
-    return resultado;
 }
 
 
@@ -89,15 +82,19 @@ void guardarImagen(const std::string& ruta, int** imagen) {
 }
 
 int main() {
-    int** imagen_original = cargarImagen("imagen.jpg");
-    int** imagen_resultado;
+    int** imagen_original = cargarImagen("imagen3.jpg");
+
+    int** imagen_resultado = new int*[altura];
+    for (int i = 0; i < altura; i++) {
+        imagen_resultado[i] = new int[ancho];
+    }
 
     // Primer fitro
     int iteraciones_totales = 40;
-    float kernelData1[3][3] = { {1, 1, 1}, {1, 1, 1}, {1, 1, 1} };
+    int kernelData1[3][3] = { {1, 1, 1}, {1, 1, 1}, {1, 1, 1} };
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    imagen_resultado = aplicarFiltro(imagen_original, iteraciones_totales, kernelData1);
+    aplicarFiltro(imagen_original, imagen_resultado, iteraciones_totales, kernelData1);
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_time = end_time - start_time;
 
@@ -109,10 +106,10 @@ int main() {
     //-------------------------------------------
 
     iteraciones_totales = 1;
-    float kernelData2[3][3] = { {0, 1, 0}, {1, -4, 1}, {0, 1, 0} };
+    int kernelData2[3][3] = { {0, 1, 0}, {1, -4, 1}, {0, 1, 0} };
 
     start_time = std::chrono::high_resolution_clock::now();
-    imagen_resultado = aplicarFiltro(imagen_original, iteraciones_totales, kernelData2);
+    aplicarFiltro(imagen_original, imagen_resultado, iteraciones_totales, kernelData2);
     end_time = std::chrono::high_resolution_clock::now();
     elapsed_time = end_time - start_time;
 
@@ -124,10 +121,10 @@ int main() {
     //----------------------------------------------
 
     iteraciones_totales = 1;
-    float kernelData3 [3][3] = { {-2, -1, 0}, {-1, 1, 1}, {0, 1, 2}};
+    int kernelData3 [3][3] = { {-2, -1, 0}, {-1, 1, 1}, {0, 1, 2}};
 
     start_time = std::chrono::high_resolution_clock::now();
-    imagen_resultado = aplicarFiltro(imagen_original, iteraciones_totales, kernelData3);
+    aplicarFiltro(imagen_original, imagen_resultado, iteraciones_totales, kernelData3);
     end_time = std::chrono::high_resolution_clock::now();
     elapsed_time = end_time - start_time;
 
