@@ -81,18 +81,20 @@ void guardarImagen(const std::string& ruta, int** imagen) {
     cv::imwrite(ruta, imagen_mat);
 }
 
+
 int main() {
-    int** imagen_original = cargarImagen("imagen3.jpg");
+    int** imagen_original = cargarImagen("imagen.jpg");
 
     int** imagen_resultado = new int*[altura];
     for (int i = 0; i < altura; i++) {
         imagen_resultado[i] = new int[ancho];
     }
 
-    // Primer fitro
+
     int iteraciones_totales = 40;
     int kernelData1[3][3] = { {1, 1, 1}, {1, 1, 1}, {1, 1, 1} };
 
+    auto start_totalTime = std::chrono::high_resolution_clock::now();
     auto start_time = std::chrono::high_resolution_clock::now();
     aplicarFiltro(imagen_original, imagen_resultado, iteraciones_totales, kernelData1);
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -105,8 +107,8 @@ int main() {
 
     //-------------------------------------------
 
-    iteraciones_totales = 1;
-    int kernelData2[3][3] = { {0, 1, 0}, {1, -4, 1}, {0, 1, 0} };
+    iteraciones_totales = 20;
+    int kernelData2[3][3] = { {1, 1, 1}, {1, 2, 1}, {1, 1, 1} };
 
     start_time = std::chrono::high_resolution_clock::now();
     aplicarFiltro(imagen_original, imagen_resultado, iteraciones_totales, kernelData2);
@@ -116,12 +118,12 @@ int main() {
     std::cout << "Tiempo para el segundo filtro: " << elapsed_time.count() << " segundos" << std::endl;
 
     // Guardar la imagen desenfocada
-    guardarImagen("imagen_deteccionBordes.jpg", imagen_resultado);
+    guardarImagen("imagen_suavizado.jpg", imagen_resultado);
 
     //----------------------------------------------
 
     iteraciones_totales = 1;
-    int kernelData3 [3][3] = { {-2, -1, 0}, {-1, 1, 1}, {0, 1, 2}};
+    int kernelData3[3][3] = { {0, 1, 0}, {1, -4, 1}, {0, 1, 0} };
 
     start_time = std::chrono::high_resolution_clock::now();
     aplicarFiltro(imagen_original, imagen_resultado, iteraciones_totales, kernelData3);
@@ -131,7 +133,28 @@ int main() {
     std::cout << "Tiempo para el tercer filtro: " << elapsed_time.count() << " segundos" << std::endl;
 
     // Guardar la imagen desenfocada
+    guardarImagen("imagen_deteccionBordes.jpg", imagen_resultado);
+
+    //----------------------------------------------
+
+    iteraciones_totales = 1;
+    int kernelData4 [3][3] = { {-2, -1, 0}, {-1, 1, 1}, {0, 1, 2}};
+
+    start_time = std::chrono::high_resolution_clock::now();
+    aplicarFiltro(imagen_original, imagen_resultado, iteraciones_totales, kernelData4);
+    end_time = std::chrono::high_resolution_clock::now();
+    auto end_totalTime = std::chrono::high_resolution_clock::now();
+
+    elapsed_time = end_time - start_time;
+    std::cout << "Tiempo para el cuarto filtro: " << elapsed_time.count() << " segundos" << std::endl;
+
+    std::chrono::duration<double> elapsed_totalTime = end_totalTime - start_totalTime;
+    std::cout << "Tiempo total: " << elapsed_totalTime.count() << " segundos" << std::endl;
+
+    // Guardar la imagen desenfocada
     guardarImagen("imagen_repujada.jpg", imagen_resultado);
+
+
 
     // Liberar memoria
     for (int i = 0; i < altura; i++) {
