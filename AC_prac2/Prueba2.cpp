@@ -2,99 +2,105 @@
 #include <chrono>
 #include <opencv2/opencv.hpp>
 
-int altura;
-int ancho;
+int height;
+int width;
 
-int** cargarImagen(const std::string& ruta) {
-    cv::Mat imagen = cv::imread(ruta, cv::IMREAD_GRAYSCALE);  // Convertir a blanco y negro
-    if (imagen.empty()) {
-        std::cerr << "No se pudo cargar la imagen" << std::endl;
+const int BLUR_ITERATIONS = 40;
+const int SINGLE_ITERATION = 1;
+const unsigned KERNEL_MASK_SSE[4] = { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0 };
+
+int kernelData1[3][3] = { {1, 1, 1}, {1, 1, 1}, {1, 1, 1} }; // BLUR
+int kernelData2[3][3] = { {1, 1, 1}, {1, 2, 1}, {1, 1, 1} }; // SMOOTHING
+int kernelData3[3][3] = { {0, 1, 0}, {1, -4, 1}, {0, 1, 0} }; // EDGE DETECTION
+int kernelData4[3][3] = { {-2, -1, 0}, {-1, 1, 1}, {0, 1, 2} }; // EMBOSSING
+
+int** loadImage(const std::string& route) {
+    cv::Mat image = cv::imread(route, cv::IMREAD_GRAYSCALE);
+    if (image.empty()) {
+        std::cerr << "ERROR: can't read image" << std::endl;
     }
 
-    altura = imagen.rows;
-    ancho = imagen.cols;
-    int** imagen_array = new int* [altura];
-    for (int i = 0; i < altura; i++) {
-        imagen_array[i] = new int[ancho];
-        for (int j = 0; j < ancho; j++) {
-            imagen_array[i][j] = static_cast<int>(imagen.at<uchar>(i, j));
+    height = image.rows;
+    width = image.cols;
+    int** arrayImage = new int* [height];
+    for (int i = 0; i < height; i++) {
+        arrayImage[i] = new int[width];
+        for (int j = 0; j < width; j++) {
+            arrayImage[i][j] = static_cast<int>(image.at<uchar>(i, j));
         }
     }
-    return imagen_array;
+    return arrayImage;
 }
 
-void aplicarFiltro(int** imagen_original, int** resultado, int iteraciones_totales, int kernelData[3][3]) {
-    int** temp = new int* [altura];
+void applyFilter(int** originalImage, int** resultImage, int iterations, int kernelData[3][3]) {
+    int** temp = new int* [height];
 
-    // Copiar la imagen original al resultado
-    for (int i = 0; i < altura; i++) {
-        temp[i] = new int[ancho];
-        for (int j = 0; j < ancho; j++) {
-            resultado[i][j] = imagen_original[i][j];
-            temp[i][j] = imagen_original[i][j];
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        temp[i] = new int[width];
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
         }
     }
 
-    // Aplicar el filtro con el número de iteraciones especificado
-    for (int iteracion = 0; iteracion < iteraciones_totales; iteracion++) {
+    // Apply the filter with the specified number of iterations
+    for (int iteration = 0; iteration < iterations; iteration++) {
 
-
-        for (int i = 1; i < altura - 1; i++) {
-            for (int j = 1; j < ancho - 1; j++) {
-                int suma = 0;
+        for (int i = 1; i < height - 1; i++) {
+            for (int j = 1; j < width - 1; j++) {
+                int sum = 0;
                 for (int m = 0; m < 3; m++) {
                     for (int n = 0; n < 3; n++) {
-                        suma += resultado[i + m - 1][j + n - 1] * kernelData[m][n];
+                        sum += resultImage[i + m - 1][j + n - 1] * kernelData[m][n];
                     }
                 }
-                temp[i][j] = (suma / 9);  // Normalizar el resultado
+                temp[i][j] = (sum / 9);  // Normalize the result
             }
         }
 
-        // Copiar el resultado temporal al resultado final
-        for (int i = 0; i < altura; i++) {
-            for (int j = 0; j < ancho; j++) {
-                resultado[i][j] = temp[i][j];
-                // std::cout << resultado[i][j] << " ";
+        // Copy the temporary result to the final result
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
             }
-            // std::cout << std::endl;
         }
     }
 
-    // Liberar memoria de la matriz temporal
-    for (int i = 0; i < altura; i++) {
+    // Free temporary matrix memory
+    for (int i = 0; i < height; i++) {
         delete[] temp[i];
     }
     delete[] temp;
 }
 
-void aplicarFiltro_x86(int** imagen_original, int** resultado, int iteraciones_totales, int kernelData[3][3]) {
-    int** temp = new int* [altura];
+void applyFilterx86(int** originalImage, int** resultImage, int iterations, int kernelData[3][3]) {
+    int** temp = new int* [height];
 
-    // Copiar la imagen original al resultado
-    for (int i = 0; i < altura; i++) {
-        temp[i] = new int[ancho];
-        for (int j = 0; j < ancho; j++) {
-            resultado[i][j] = imagen_original[i][j];
-            temp[i][j] = imagen_original[i][j];
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        temp[i] = new int[width];
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
         }
     }
 
-    // Aplicar el filtro con el número de iteraciones especificado
-    for (int iteracion = 0; iteracion < iteraciones_totales; iteracion++) {
+    // Apply the filter with the specified number of iterations
+    for (int iteration = 0; iteration < iterations; iteration++) {
         int row = 1, col = 1, k_row = 0, k_col = 0, sum = 0;
 
         __asm {
             mov row, 1
             r_loop:
-            mov edx, altura
+            mov edx, height
                 sub edx, 1
                 cmp row, edx
                 jnb end_r_loop
 
                 mov col, 1
                 c_loop:
-            mov edx, ancho
+            mov edx, width
                 sub edx, 1
                 cmp col, edx
                 jnb end_c_loop
@@ -110,20 +116,20 @@ void aplicarFiltro_x86(int** imagen_original, int** resultado, int iteraciones_t
                 cmp k_col, 3
                 jnb end_kc_loop
 
-                // Calculate 'resultado' row offset
+                // Calculate 'resultImage' row offset
                 mov edx, row    // offset = curr_row
                 add edx, k_row  // offset += curr_kernelRow
                 sub edx, 1      // offset -= 1
                 // Get row address
-                mov esi, resultado
+                mov esi, resultImage
                 mov ebx, [esi + 4 * edx]
                 mov esi, ebx
 
-                // Calculate 'resultado' column offset
+                // Calculate 'resultImage' column offset
                 mov edx, col    // offset = curr_column
                 add edx, k_col  // offset += curr_kernelColumn
                 sub edx, 1      // offset -= 1
-                // Get resultado[i + m -1][j + n -1]
+                // Get resultImage[i + m -1][j + n -1]
                 mov edx, [esi + 4 * edx]
 
                 // Get kernel[m][n]
@@ -143,7 +149,7 @@ void aplicarFiltro_x86(int** imagen_original, int** resultado, int iteraciones_t
                 jmp kr_loop
                 end_kr_loop :
 
-            // Store calculated value in temporal result matrix
+            // Store calculated value in temporary result matrix
             mov edi, temp
                 mov edx, row
                 mov edi, [edi + 4 * edx]    // edi <- temp[i] (row address)
@@ -151,6 +157,7 @@ void aplicarFiltro_x86(int** imagen_original, int** resultado, int iteraciones_t
                 mov eax, sum
                 mov edx, 0
                 mov ecx, 9
+                cdq
                 idiv ecx                    // eax <- sum/9
 
                 mov edx, col
@@ -165,107 +172,278 @@ void aplicarFiltro_x86(int** imagen_original, int** resultado, int iteraciones_t
                 end_r_loop :
         }
 
-        for (int i = 0; i < altura; i++) {
-            for (int j = 0; j < ancho; j++) {
-                resultado[i][j] = temp[i][j];
-                // std::cout << resultado[i][j] << " ";
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
             }
-            // std::cout << std::endl;
         }
     }
 
-    // Liberar memoria de la matriz temporal
-    for (int i = 0; i < altura; i++) {
+    // Free temporary matrix memory
+    for (int i = 0; i < height; i++) {
         delete[] temp[i];
     }
     delete[] temp;
 }
 
-void guardarImagen(const std::string& ruta, int** imagen) {
-    // Crear la imagen desenfocada
-    cv::Mat imagen_mat(altura, ancho, CV_8U);
-    for (int i = 0; i < altura; i++) {
-        for (int j = 0; j < ancho; j++) {
-            imagen_mat.at<uchar>(i, j) = static_cast<uchar>(imagen[i][j]);
+void applyFilterSSE(int** originalImage, int** resultImage, int iterations, int kernelData[3][3]) {
+    int** temp = new int* [height];
+
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        temp[i] = new int[width];
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
         }
     }
 
-    cv::imwrite(ruta, imagen_mat);
+    int iterableHeight = height - 1, iterableWidth = width - 1;
+
+    for (int iteration = 0; iteration < iterations; iteration++) {
+        int sum = 0, kernelRow = 0, row = 1, col = 1;
+
+        __asm {
+            mov ecx, 9
+            movups xmm2, KERNEL_MASK_SSE
+            mov esi, temp
+
+            row_loop :
+            mov edx, iterableHeight
+                cmp row, edx // compare if row < height - 1
+                jnb end_row_loop
+
+                mov col, 1
+                col_loop :
+                mov sum, 0 // clear the sum for each element
+                mov edx, iterableWidth
+                cmp col, edx // compare if col < width - 1
+                jnb end_col_loop
+
+                // save current row and column in the stack
+                push row
+                push col
+
+                // move to the first element of the 3x3 submatrix
+                sub row, 1
+                sub col, 1
+
+                mov kernelRow, 0
+                // in each iteration a row of the 3x3 submatrix is multiplied by
+                // the corresponding row of the kernel matrix
+                kernel_loop:
+            cmp kernelRow, 3
+                jnb end_kernel_loop
+
+                // access the image
+                mov edx, row
+                add edx, kernelRow
+                mov edi, resultImage
+                mov ebx, [edi + 4 * edx] // get row address
+                mov edx, col
+                movups xmm0, [ebx + 4 * edx] // move 4 integers to xmm0
+                cvtdq2ps xmm0, xmm0 // convert to float (required for multiplication)
+
+                // access the kernel matrix
+                mov edx, kernelRow
+                imul edx, 3 // multiply row number by the size of each row
+                lea edi, kernelData
+                movups xmm1, [edi + 4 * edx] // move 4 integers to xmm0
+                cvtdq2ps xmm1, xmm1 // convert to float (required for multiplication)
+                andps xmm1, xmm2 // apply the mask to set to 0 the bits 96:127 (we don't want that element)
+
+                // multiply both rows
+                mulps xmm0, xmm1
+
+                // perform the addition of multiplication results
+                haddps xmm0, xmm0
+                haddps xmm0, xmm0
+                cvtss2si eax, xmm0 // convert the sum to integer and store it in eax
+                add sum, eax
+
+                add kernelRow, 1
+                jmp kernel_loop
+
+                end_kernel_loop :
+            mov eax, sum
+                cdq // sign extension
+                idiv ecx // eax <- sum / 9
+
+                // retrieve row and col from the stack to store the result in the corresponding element
+                pop col
+                pop row
+                mov edx, row
+                mov ebx, [esi + 4 * edx]
+                mov edx, col
+                mov[ebx + 4 * edx], eax // temp[i][j] <- sum / 9
+
+                add col, 1
+                jmp col_loop
+                end_col_loop :
+
+            add row, 1
+                jmp row_loop
+                end_row_loop :
+        }
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
+            }
+        }
+    }
+
+    // Free temporary matrix memory
+    for (int i = 0; i < height; i++) {
+        delete[] temp[i];
+    }
+    delete[] temp;
 }
 
-
-int main() {
-    int** imagen_original = cargarImagen("imagen.jpg");
-
-    int** imagen_resultado = new int*[altura];
-    for (int i = 0; i < altura; i++) {
-        imagen_resultado[i] = new int[ancho];
-    }
-
-
-    int iteraciones_totales = 40;
-    int kernelData1[3][3] = { {1, 1, 1}, {1, 1, 1}, {1, 1, 1} };
-
-    auto start_totalTime = std::chrono::high_resolution_clock::now();
-    auto start_time = std::chrono::high_resolution_clock::now();
-    
-    /* -------------------------------------------------------------------------------
-
-    int** temp = new int* [altura];
-
-    // Copiar la imagen original al resultado
-    for (int i = 0; i < altura; i++) {
-        temp[i] = new int[ancho];
-        for (int j = 0; j < ancho; j++) {
-            imagen_resultado[i][j] = imagen_original[i][j];
-            temp[i][j] = imagen_original[i][j];
+void saveImage(const std::string& route, int** image) {
+    // Crear la imagen desenfocada
+    cv::Mat matImage(height, width, CV_8U);
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            matImage.at<uchar>(i, j) = static_cast<uchar>(image[i][j]);
         }
     }
 
-    // Aplicar el filtro con el número de iteraciones especificado
-    for (int iteracion = 0; iteracion < iteraciones_totales; iteracion++) {
+    cv::imwrite(route, matImage);
+}
+
+int main() {
+        
+    int** originalImage = loadImage("imagen.jpg");
+
+    int** temp = new int* [height];
+    int** resultImage = new int* [height];
+    for (int i = 0; i < height; i++) {
+        temp[i] = new int[width];
+        resultImage[i] = new int[width];
+    }
+    
+    
+    // ---------- C BENCHMARK ----------
+
+    std::cout << "C BENCHMARK" << std::endl;
+
+    auto totalStartTime = std::chrono::high_resolution_clock::now();
+    auto startTime = std::chrono::high_resolution_clock::now();
+    applyFilter(originalImage, resultImage, BLUR_ITERATIONS, kernelData1);
+    auto endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsedTime = endTime - startTime;
+
+    std::cout << "\tFirst filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    // Save the blurred image
+    saveImage("imagen_desenfocada.jpg", resultImage);
+
+    //-------------------------------------------
+
+    startTime = std::chrono::high_resolution_clock::now();
+    applyFilter(originalImage, resultImage, SINGLE_ITERATION, kernelData2);
+    endTime = std::chrono::high_resolution_clock::now();
+    elapsedTime = endTime - startTime;
+
+    std::cout << "\tSecond filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    // Save the smoothed image
+    saveImage("imagen_suavizado.jpg", resultImage);
+
+    //----------------------------------------------
+
+    startTime = std::chrono::high_resolution_clock::now();
+    applyFilter(originalImage, resultImage, SINGLE_ITERATION, kernelData3);
+    endTime = std::chrono::high_resolution_clock::now();
+    elapsedTime = endTime - startTime;
+
+    std::cout << "\tThird filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    // Save the image with edge detection
+    saveImage("imagen_deteccionBordes.jpg", resultImage);
+
+    //----------------------------------------------
+
+    startTime = std::chrono::high_resolution_clock::now();
+    applyFilter(originalImage, resultImage, SINGLE_ITERATION, kernelData4);
+    endTime = std::chrono::high_resolution_clock::now();
+    auto totalEndTime = std::chrono::high_resolution_clock::now();
+
+    elapsedTime = endTime - startTime;
+    std::cout << "\tFourth filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    std::chrono::duration<double> totalElapsedTime = totalEndTime - totalStartTime;
+    std::cout << "\tTOTAL TIME: " << totalElapsedTime.count() << " seconds" << std::endl;
+
+    // Save the embossed image
+    saveImage("imagen_repujada.jpg", resultImage);
+
+
+    // ---------- x86 BENCHMARK ----------
+
+    std::cout << std::endl << "x86 BENCHMARK" << std::endl;
+
+    totalStartTime = std::chrono::high_resolution_clock::now();
+    startTime = std::chrono::high_resolution_clock::now();
+
+
+
+    // FIRST FILTER
+
+
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
+        }
+    }
+
+    // Apply the filter with the specified number of iterations
+    for (int iteration = 0; iteration < BLUR_ITERATIONS; iteration++) {
         int row = 1, col = 1, k_row = 0, k_col = 0, sum = 0;
 
         __asm {
             mov row, 1
-            r_loop:
-            mov edx, altura
+            r_loop_1:
+            mov edx, height
                 sub edx, 1
                 cmp row, edx
-                jnb end_r_loop
+                jnb end_r_loop_1
 
                 mov col, 1
-                c_loop:
-            mov edx, ancho
+                c_loop_1:
+            mov edx, width
                 sub edx, 1
                 cmp col, edx
-                jnb end_c_loop
+                jnb end_c_loop_1
 
                 mov sum, 0
                 mov k_row, 0
-                kr_loop:
+                kr_loop_1:
             cmp k_row, 3
-                jnb end_kr_loop
+                jnb end_kr_loop_1
 
                 mov k_col, 0
-                kc_loop :
+                kc_loop_1 :
                 cmp k_col, 3
-                jnb end_kc_loop
+                jnb end_kc_loop_1
 
-                // Calculate 'resultado' row offset
+                // Calculate 'resultImage' row offset
                 mov edx, row    // offset = curr_row
                 add edx, k_row  // offset += curr_kernelRow
                 sub edx, 1      // offset -= 1
                 // Get row address
-                mov esi, imagen_resultado
+                mov esi, resultImage
                 mov ebx, [esi + 4 * edx]
                 mov esi, ebx
 
-                // Calculate 'resultado' column offset
+                // Calculate 'resultImage' column offset
                 mov edx, col    // offset = curr_column
                 add edx, k_col  // offset += curr_kernelColumn
                 sub edx, 1      // offset -= 1
-                // Get resultado[i + m -1][j + n -1]
+                // Get resultImage[i + m -1][j + n -1]
                 mov edx, [esi + 4 * edx]
 
                 // Get kernel[m][n]
@@ -278,14 +456,14 @@ int main() {
                 add sum, edx
 
                 add k_col, 1
-                jmp kc_loop
-                end_kc_loop :
+                jmp kc_loop_1
+                end_kc_loop_1 :
 
             add k_row, 1
-                jmp kr_loop
-                end_kr_loop :
+                jmp kr_loop_1
+                end_kr_loop_1 :
 
-            // Store calculated value in temporal result matrix
+            // Store calculated value in temporary result matrix
             mov edi, temp
                 mov edx, row
                 mov edi, [edi + 4 * edx]    // edi <- temp[i] (row address)
@@ -293,106 +471,899 @@ int main() {
                 mov eax, sum
                 mov edx, 0
                 mov ecx, 9
+                cdq
                 idiv ecx                    // eax <- sum/9
 
                 mov edx, col
                 mov[edi + 4 * edx], eax     // temp[i][j] <- sum/9
 
                 add col, 1
-                jmp c_loop
-                end_c_loop :
+                jmp c_loop_1
+                end_c_loop_1 :
 
             add row, 1
-                jmp r_loop
-                end_r_loop :
+                jmp r_loop_1
+                end_r_loop_1 :
         }
 
-        for (int i = 0; i < altura; i++) {
-            for (int j = 0; j < ancho; j++) {
-                imagen_resultado[i][j] = temp[i][j];
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
             }
         }
     }
 
-    // Liberar memoria de la matriz temporal
-    for (int i = 0; i < altura; i++) {
+
+    endTime = std::chrono::high_resolution_clock::now();
+    elapsedTime = endTime - startTime;
+
+    std::cout << "\tFirst filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    // Save the blurred image
+    saveImage("imagen_desenfocadax86.jpg", resultImage);
+
+    //-------------------------------------------
+
+    startTime = std::chrono::high_resolution_clock::now();
+
+    // SECOND FILTER
+
+
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
+        }
+    }
+
+    // Apply the filter with the specified number of iterations
+    for (int iteration = 0; iteration < SINGLE_ITERATION; iteration++) {
+        int row = 1, col = 1, k_row = 0, k_col = 0, sum = 0;
+
+        __asm {
+            mov row, 1
+            r_loop_2:
+            mov edx, height
+                sub edx, 1
+                cmp row, edx
+                jnb end_r_loop_2
+
+                mov col, 1
+                c_loop_2:
+            mov edx, width
+                sub edx, 1
+                cmp col, edx
+                jnb end_c_loop_2
+
+                mov sum, 0
+                mov k_row, 0
+                kr_loop_2:
+            cmp k_row, 3
+                jnb end_kr_loop_2
+
+                mov k_col, 0
+                kc_loop_2 :
+                cmp k_col, 3
+                jnb end_kc_loop_2
+
+                // Calculate 'resultImage' row offset
+                mov edx, row    // offset = curr_row
+                add edx, k_row  // offset += curr_kernelRow
+                sub edx, 1      // offset -= 1
+                // Get row address
+                mov esi, resultImage
+                mov ebx, [esi + 4 * edx]
+                mov esi, ebx
+
+                // Calculate 'resultImage' column offset
+                mov edx, col    // offset = curr_column
+                add edx, k_col  // offset += curr_kernelColumn
+                sub edx, 1      // offset -= 1
+                // Get resultImage[i + m -1][j + n -1]
+                mov edx, [esi + 4 * edx]
+
+                // Get kernel[m][n]
+                mov ecx, k_row      // edx <- current_kernelRow
+                imul ecx, 3         // multiply row number by the size of each row
+                add ecx, k_col      // add column number
+                lea esi, kernelData2 // get kernelData address
+                mov ecx, [esi + 4 * ecx]    // retrieve element
+                imul edx, ecx
+                add sum, edx
+
+                add k_col, 1
+                jmp kc_loop_2
+                end_kc_loop_2 :
+
+            add k_row, 1
+                jmp kr_loop_2
+                end_kr_loop_2 :
+
+            // Store calculated value in temporary result matrix
+            mov edi, temp
+                mov edx, row
+                mov edi, [edi + 4 * edx]    // edi <- temp[i] (row address)
+
+                mov eax, sum
+                mov edx, 0
+                mov ecx, 9
+                cdq
+                idiv ecx                    // eax <- sum/9
+
+                mov edx, col
+                mov[edi + 4 * edx], eax     // temp[i][j] <- sum/9
+
+                add col, 1
+                jmp c_loop_2
+                end_c_loop_2 :
+
+            add row, 1
+                jmp r_loop_2
+                end_r_loop_2 :
+        }
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
+            }
+        }
+    }
+
+
+
+    endTime = std::chrono::high_resolution_clock::now();
+    elapsedTime = endTime - startTime;
+
+    std::cout << "\tSecond filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    // Save the smoothed image
+    saveImage("imagen_suavizadox86.jpg", resultImage);
+
+    //----------------------------------------------
+
+    startTime = std::chrono::high_resolution_clock::now();
+
+    
+    // THIRD FILTER
+
+
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
+        }
+    }
+
+    // Apply the filter with the specified number of iterations
+    for (int iteration = 0; iteration < SINGLE_ITERATION; iteration++) {
+        int row = 1, col = 1, k_row = 0, k_col = 0, sum = 0;
+
+        __asm {
+            mov row, 1
+            r_loop_3:
+            mov edx, height
+                sub edx, 1
+                cmp row, edx
+                jnb end_r_loop_3
+
+                mov col, 1
+                c_loop_3:
+            mov edx, width
+                sub edx, 1
+                cmp col, edx
+                jnb end_c_loop_3
+
+                mov sum, 0
+                mov k_row, 0
+                kr_loop_3:
+            cmp k_row, 3
+                jnb end_kr_loop_3
+
+                mov k_col, 0
+                kc_loop_3 :
+                cmp k_col, 3
+                jnb end_kc_loop_3
+
+                // Calculate 'resultImage' row offset
+                mov edx, row    // offset = curr_row
+                add edx, k_row  // offset += curr_kernelRow
+                sub edx, 1      // offset -= 1
+                // Get row address
+                mov esi, resultImage
+                mov ebx, [esi + 4 * edx]
+                mov esi, ebx
+
+                // Calculate 'resultImage' column offset
+                mov edx, col    // offset = curr_column
+                add edx, k_col  // offset += curr_kernelColumn
+                sub edx, 1      // offset -= 1
+                // Get resultImage[i + m -1][j + n -1]
+                mov edx, [esi + 4 * edx]
+
+                // Get kernel[m][n]
+                mov ecx, k_row      // edx <- current_kernelRow
+                imul ecx, 3         // multiply row number by the size of each row
+                add ecx, k_col      // add column number
+                lea esi, kernelData3 // get kernelData address
+                mov ecx, [esi + 4 * ecx]    // retrieve element
+                imul edx, ecx
+                add sum, edx
+
+                add k_col, 1
+                jmp kc_loop_3
+                end_kc_loop_3 :
+
+            add k_row, 1
+                jmp kr_loop_3
+                end_kr_loop_3 :
+
+            // Store calculated value in temporary result matrix
+            mov edi, temp
+                mov edx, row
+                mov edi, [edi + 4 * edx]    // edi <- temp[i] (row address)
+
+                mov eax, sum
+                mov edx, 0
+                mov ecx, 9
+                cdq
+                idiv ecx                    // eax <- sum/9
+
+                mov edx, col
+                mov[edi + 4 * edx], eax     // temp[i][j] <- sum/9
+
+                add col, 1
+                jmp c_loop_3
+                end_c_loop_3 :
+
+            add row, 1
+                jmp r_loop_3
+                end_r_loop_3 :
+        }
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
+            }
+        }
+    }
+
+
+
+    
+    endTime = std::chrono::high_resolution_clock::now();
+    elapsedTime = endTime - startTime;
+
+    std::cout << "\tThird filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    // Save the image with edge detection
+    saveImage("imagen_deteccionBordesx86.jpg", resultImage);
+
+    //----------------------------------------------
+
+    startTime = std::chrono::high_resolution_clock::now();
+
+
+    // FOURTH FILTER
+
+
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
+        }
+    }
+
+    // Apply the filter with the specified number of iterations
+    for (int iteration = 0; iteration < SINGLE_ITERATION; iteration++) {
+        int row = 1, col = 1, k_row = 0, k_col = 0, sum = 0;
+
+        __asm {
+            mov row, 1
+            r_loop_4:
+            mov edx, height
+                sub edx, 1
+                cmp row, edx
+                jnb end_r_loop_4
+
+                mov col, 1
+                c_loop_4:
+            mov edx, width
+                sub edx, 1
+                cmp col, edx
+                jnb end_c_loop_4
+
+                mov sum, 0
+                mov k_row, 0
+                kr_loop_4:
+            cmp k_row, 3
+                jnb end_kr_loop_4
+
+                mov k_col, 0
+                kc_loop_4 :
+                cmp k_col, 3
+                jnb end_kc_loop_4
+
+                // Calculate 'resultImage' row offset
+                mov edx, row    // offset = curr_row
+                add edx, k_row  // offset += curr_kernelRow
+                sub edx, 1      // offset -= 1
+                // Get row address
+                mov esi, resultImage
+                mov ebx, [esi + 4 * edx]
+                mov esi, ebx
+
+                // Calculate 'resultImage' column offset
+                mov edx, col    // offset = curr_column
+                add edx, k_col  // offset += curr_kernelColumn
+                sub edx, 1      // offset -= 1
+                // Get resultImage[i + m -1][j + n -1]
+                mov edx, [esi + 4 * edx]
+
+                // Get kernel[m][n]
+                mov ecx, k_row      // edx <- current_kernelRow
+                imul ecx, 3         // multiply row number by the size of each row
+                add ecx, k_col      // add column number
+                lea esi, kernelData4 // get kernelData address
+                mov ecx, [esi + 4 * ecx]    // retrieve element
+                imul edx, ecx
+                add sum, edx
+
+                add k_col, 1
+                jmp kc_loop_4
+                end_kc_loop_4 :
+
+            add k_row, 1
+                jmp kr_loop_4
+                end_kr_loop_4 :
+
+            // Store calculated value in temporary result matrix
+            mov edi, temp
+                mov edx, row
+                mov edi, [edi + 4 * edx]    // edi <- temp[i] (row address)
+
+                mov eax, sum
+                mov edx, 0
+                mov ecx, 9
+                cdq
+                idiv ecx                    // eax <- sum/9
+
+                mov edx, col
+                mov[edi + 4 * edx], eax     // temp[i][j] <- sum/9
+
+                add col, 1
+                jmp c_loop_4
+                end_c_loop_4 :
+
+            add row, 1
+                jmp r_loop_4
+                end_r_loop_4 :
+        }
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
+            }
+        }
+    }
+
+
+
+    endTime = std::chrono::high_resolution_clock::now();
+    totalEndTime = std::chrono::high_resolution_clock::now();
+
+    elapsedTime = endTime - startTime;
+    std::cout << "\tFourth filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    totalElapsedTime = totalEndTime - totalStartTime;
+    std::cout << "\tTOTAL TIME: " << totalElapsedTime.count() << " seconds" << std::endl;
+
+    // Save the embossed image
+    saveImage("imagen_repujadax86.jpg", resultImage);
+
+
+    
+    // ---------- SSE BENCHMARK ----------
+
+    std::cout << std::endl << "SSE BENCHMARK" << std::endl;
+
+    totalStartTime = std::chrono::high_resolution_clock::now();
+    startTime = std::chrono::high_resolution_clock::now();
+
+
+    // FIRST FILTER
+
+
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
+        }
+    }
+
+    for (int iteration = 0; iteration < BLUR_ITERATIONS; iteration++) {
+        int sum = 0, kernelRow = 0, row = 1, col = 1, iterableHeight = height - 1, iterableWidth = width - 1;
+
+        __asm {
+            mov ecx, 9
+            movups xmm2, KERNEL_MASK_SSE
+            mov esi, temp
+
+            row_loop_1 :
+            mov edx, iterableHeight
+                cmp row, edx // compare if row < height - 1
+                jnb end_row_loop_1
+
+                mov col, 1
+                col_loop_1 :
+                mov sum, 0 // clear the sum for each element
+                mov edx, iterableWidth
+                cmp col, edx // compare if col < width - 1
+                jnb end_col_loop_1
+
+                // save current row and column in the stack
+                push row
+                push col
+
+                // move to the first element of the 3x3 submatrix
+                sub row, 1
+                sub col, 1
+
+                mov kernelRow, 0
+                // in each iteration a row of the 3x3 submatrix is multiplied by
+                // the corresponding row of the kernel matrix
+                kernel_loop_1:
+            cmp kernelRow, 3
+                jnb end_kernel_loop_1
+
+                // access the image
+                mov edx, row
+                add edx, kernelRow
+                mov edi, resultImage
+                mov ebx, [edi + 4 * edx] // get row address
+                mov edx, col
+                movups xmm0, [ebx + 4 * edx] // move 4 integers to xmm0
+                cvtdq2ps xmm0, xmm0 // convert to float (required for multiplication)
+
+                // access the kernel matrix
+                mov edx, kernelRow
+                imul edx, 3 // multiply row number by the size of each row
+                lea edi, kernelData1
+                movups xmm1, [edi + 4 * edx] // move 4 integers to xmm0
+                cvtdq2ps xmm1, xmm1 // convert to float (required for multiplication)
+                andps xmm1, xmm2 // apply the mask to set to 0 the bits 96:127 (we don't want that element)
+
+                // multiply both rows
+                mulps xmm0, xmm1
+
+                // perform the addition of multiplication results
+                haddps xmm0, xmm0
+                haddps xmm0, xmm0
+                cvtss2si eax, xmm0 // convert the sum to integer and store it in eax
+                add sum, eax
+
+                add kernelRow, 1
+                jmp kernel_loop_1
+
+                end_kernel_loop_1 :
+            mov eax, sum
+                cdq // sign extension
+                idiv ecx // eax <- sum / 9
+
+                // retrieve row and col from the stack to store the result in the corresponding element
+                pop col
+                pop row
+                mov edx, row
+                mov ebx, [esi + 4 * edx]
+                mov edx, col
+                mov[ebx + 4 * edx], eax // temp[i][j] <- sum / 9
+
+                add col, 1
+                jmp col_loop_1
+                end_col_loop_1 :
+
+            add row, 1
+                jmp row_loop_1
+                end_row_loop_1 :
+        }
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
+            }
+        }
+    }
+
+
+    endTime = std::chrono::high_resolution_clock::now();
+    elapsedTime = endTime - startTime;
+
+    std::cout << "\tFirst filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    // Save the blurred image
+    saveImage("imagen_desenfocadaSSE.jpg", resultImage);
+
+    //-------------------------------------------
+
+    startTime = std::chrono::high_resolution_clock::now();
+
+    // SECOND FILTER
+
+
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
+        }
+    }
+
+    for (int iteration = 0; iteration < SINGLE_ITERATION; iteration++) {
+        int sum = 0, kernelRow = 0, row = 1, col = 1, iterableHeight = height - 1, iterableWidth = width - 1;
+
+        __asm {
+            mov ecx, 9
+            movups xmm2, KERNEL_MASK_SSE
+            mov esi, temp
+
+            row_loop_2 :
+            mov edx, iterableHeight
+                cmp row, edx // compare if row < height - 1
+                jnb end_row_loop_2
+
+                mov col, 1
+                col_loop_2 :
+                mov sum, 0 // clear the sum for each element
+                mov edx, iterableWidth
+                cmp col, edx // compare if col < width - 1
+                jnb end_col_loop_2
+
+                // save current row and column in the stack
+                push row
+                push col
+
+                // move to the first element of the 3x3 submatrix
+                sub row, 1
+                sub col, 1
+
+                mov kernelRow, 0
+                // in each iteration a row of the 3x3 submatrix is multiplied by
+                // the corresponding row of the kernel matrix
+                kernel_loop_2:
+            cmp kernelRow, 3
+                jnb end_kernel_loop_2
+
+                // access the image
+                mov edx, row
+                add edx, kernelRow
+                mov edi, resultImage
+                mov ebx, [edi + 4 * edx] // get row address
+                mov edx, col
+                movups xmm0, [ebx + 4 * edx] // move 4 integers to xmm0
+                cvtdq2ps xmm0, xmm0 // convert to float (required for multiplication)
+
+                // access the kernel matrix
+                mov edx, kernelRow
+                imul edx, 3 // multiply row number by the size of each row
+                lea edi, kernelData2
+                movups xmm1, [edi + 4 * edx] // move 4 integers to xmm0
+                cvtdq2ps xmm1, xmm1 // convert to float (required for multiplication)
+                andps xmm1, xmm2 // apply the mask to set to 0 the bits 96:127 (we don't want that element)
+
+                // multiply both rows
+                mulps xmm0, xmm1
+
+                // perform the addition of multiplication results
+                haddps xmm0, xmm0
+                haddps xmm0, xmm0
+                cvtss2si eax, xmm0 // convert the sum to integer and store it in eax
+                add sum, eax
+
+                add kernelRow, 1
+                jmp kernel_loop_2
+
+                end_kernel_loop_2 :
+            mov eax, sum
+                cdq // sign extension
+                idiv ecx // eax <- sum / 9
+
+                // retrieve row and col from the stack to store the result in the corresponding element
+                pop col
+                pop row
+                mov edx, row
+                mov ebx, [esi + 4 * edx]
+                mov edx, col
+                mov[ebx + 4 * edx], eax // temp[i][j] <- sum / 9
+
+                add col, 1
+                jmp col_loop_2
+                end_col_loop_2 :
+
+            add row, 1
+                jmp row_loop_2
+                end_row_loop_2 :
+        }
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
+            }
+        }
+    }
+
+
+
+    endTime = std::chrono::high_resolution_clock::now();
+    elapsedTime = endTime - startTime;
+
+    std::cout << "\tSecond filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    // Save the smoothed image
+    saveImage("imagen_suavizadoSSE.jpg", resultImage);
+
+    //----------------------------------------------
+
+    startTime = std::chrono::high_resolution_clock::now();
+
+
+
+    // THIRD FILTER
+
+
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
+        }
+    }
+
+    for (int iteration = 0; iteration < SINGLE_ITERATION; iteration++) {
+        int sum = 0, kernelRow = 0, row = 1, col = 1, iterableHeight = height - 1, iterableWidth = width - 1;
+
+        __asm {
+            mov ecx, 9
+            movups xmm2, KERNEL_MASK_SSE
+            mov esi, temp
+
+            row_loop_3 :
+            mov edx, iterableHeight
+                cmp row, edx // compare if row < height - 1
+                jnb end_row_loop_3
+
+                mov col, 1
+                col_loop_3 :
+                mov sum, 0 // clear the sum for each element
+                mov edx, iterableWidth
+                cmp col, edx // compare if col < width - 1
+                jnb end_col_loop_3
+
+                // save current row and column in the stack
+                push row
+                push col
+
+                // move to the first element of the 3x3 submatrix
+                sub row, 1
+                sub col, 1
+
+                mov kernelRow, 0
+                // in each iteration a row of the 3x3 submatrix is multiplied by
+                // the corresponding row of the kernel matrix
+                kernel_loop_3:
+            cmp kernelRow, 3
+                jnb end_kernel_loop_3
+
+                // access the image
+                mov edx, row
+                add edx, kernelRow
+                mov edi, resultImage
+                mov ebx, [edi + 4 * edx] // get row address
+                mov edx, col
+                movups xmm0, [ebx + 4 * edx] // move 4 integers to xmm0
+                cvtdq2ps xmm0, xmm0 // convert to float (required for multiplication)
+
+                // access the kernel matrix
+                mov edx, kernelRow
+                imul edx, 3 // multiply row number by the size of each row
+                lea edi, kernelData3
+                movups xmm1, [edi + 4 * edx] // move 4 integers to xmm0
+                cvtdq2ps xmm1, xmm1 // convert to float (required for multiplication)
+                andps xmm1, xmm2 // apply the mask to set to 0 the bits 96:127 (we don't want that element)
+
+                // multiply both rows
+                mulps xmm0, xmm1
+
+                // perform the addition of multiplication results
+                haddps xmm0, xmm0
+                haddps xmm0, xmm0
+                cvtss2si eax, xmm0 // convert the sum to integer and store it in eax
+                add sum, eax
+
+                add kernelRow, 1
+                jmp kernel_loop_3
+
+                end_kernel_loop_3 :
+            mov eax, sum
+                cdq // sign extension
+                idiv ecx // eax <- sum / 9
+
+                // retrieve row and col from the stack to store the result in the corresponding element
+                pop col
+                pop row
+                mov edx, row
+                mov ebx, [esi + 4 * edx]
+                mov edx, col
+                mov[ebx + 4 * edx], eax // temp[i][j] <- sum / 9
+
+                add col, 1
+                jmp col_loop_3
+                end_col_loop_3 :
+
+            add row, 1
+                jmp row_loop_3
+                end_row_loop_3 :
+        }
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
+            }
+        }
+    }
+
+
+
+    endTime = std::chrono::high_resolution_clock::now();
+    elapsedTime = endTime - startTime;
+
+    std::cout << "\tThird filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    // Save the image with edge detection
+    saveImage("imagen_deteccionBordesSSE.jpg", resultImage);
+
+    //----------------------------------------------
+
+    startTime = std::chrono::high_resolution_clock::now();
+
+
+    // FOURTH FILTER
+
+
+    // Copy the original image to the result
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            resultImage[i][j] = originalImage[i][j];
+            temp[i][j] = originalImage[i][j];
+        }
+    }
+
+    for (int iteration = 0; iteration < SINGLE_ITERATION; iteration++) {
+        int sum = 0, kernelRow = 0, row = 1, col = 1, iterableHeight = height - 1, iterableWidth = width - 1;
+
+        __asm {
+            mov ecx, 9
+            movups xmm2, KERNEL_MASK_SSE
+            mov esi, temp
+
+            row_loop_4 :
+            mov edx, iterableHeight
+                cmp row, edx // compare if row < height - 1
+                jnb end_row_loop_4
+
+                mov col, 1
+                col_loop_4 :
+                mov sum, 0 // clear the sum for each element
+                mov edx, iterableWidth
+                cmp col, edx // compare if col < width - 1
+                jnb end_col_loop_4
+
+                // save current row and column in the stack
+                push row
+                push col
+
+                // move to the first element of the 3x3 submatrix
+                sub row, 1
+                sub col, 1
+
+                mov kernelRow, 0
+                // in each iteration a row of the 3x3 submatrix is multiplied by
+                // the corresponding row of the kernel matrix
+                kernel_loop_4:
+            cmp kernelRow, 3
+                jnb end_kernel_loop_4
+
+                // access the image
+                mov edx, row
+                add edx, kernelRow
+                mov edi, resultImage
+                mov ebx, [edi + 4 * edx] // get row address
+                mov edx, col
+                movups xmm0, [ebx + 4 * edx] // move 4 integers to xmm0
+                cvtdq2ps xmm0, xmm0 // convert to float (required for multiplication)
+
+                // access the kernel matrix
+                mov edx, kernelRow
+                imul edx, 3 // multiply row number by the size of each row
+                lea edi, kernelData4
+                movups xmm1, [edi + 4 * edx] // move 4 integers to xmm0
+                cvtdq2ps xmm1, xmm1 // convert to float (required for multiplication)
+                andps xmm1, xmm2 // apply the mask to set to 0 the bits 96:127 (we don't want that element)
+
+                // multiply both rows
+                mulps xmm0, xmm1
+
+                // perform the addition of multiplication results
+                haddps xmm0, xmm0
+                haddps xmm0, xmm0
+                cvtss2si eax, xmm0 // convert the sum to integer and store it in eax
+                add sum, eax
+
+                add kernelRow, 1
+                jmp kernel_loop_4
+
+                end_kernel_loop_4 :
+            mov eax, sum
+                cdq // sign extension
+                idiv ecx // eax <- sum / 9
+
+                // retrieve row and col from the stack to store the result in the corresponding element
+                pop col
+                pop row
+                mov edx, row
+                mov ebx, [esi + 4 * edx]
+                mov edx, col
+                mov[ebx + 4 * edx], eax // temp[i][j] <- sum / 9
+
+                add col, 1
+                jmp col_loop_4
+                end_col_loop_4 :
+
+            add row, 1
+                jmp row_loop_4
+                end_row_loop_4 :
+        }
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                resultImage[i][j] = temp[i][j];
+            }
+        }
+    }
+
+
+
+    endTime = std::chrono::high_resolution_clock::now();
+    totalEndTime = std::chrono::high_resolution_clock::now();
+
+    elapsedTime = endTime - startTime;
+    std::cout << "\tFourth filter time: " << elapsedTime.count() << " seconds" << std::endl;
+
+    totalElapsedTime = totalEndTime - totalStartTime;
+    std::cout << "\tTOTAL TIME: " << totalElapsedTime.count() << " seconds" << std::endl;
+
+    // Save the embossed image
+    saveImage("imagen_repujadaSSE.jpg", resultImage);
+
+    
+
+    
+    // Free temporary matrix memory
+    for (int i = 0; i < height; i++) {
         delete[] temp[i];
     }
     delete[] temp;
 
-    // -------------------------------------------------------------------------------
-    */
-
-    aplicarFiltro(imagen_original, imagen_resultado, iteraciones_totales, kernelData1);
-
-    auto end_time = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed_time = end_time - start_time;
-
-    std::cout << "Tiempo para el primer filtro: " << elapsed_time.count() << " segundos" << std::endl;
-
-    // Guardar la imagen desenfocada
-    guardarImagen("imagen_desenfocada.jpg", imagen_resultado);
-
-    /*
-    //-------------------------------------------
-
-    iteraciones_totales = 1;
-    int kernelData2[3][3] = { {1, 1, 1}, {1, 2, 1}, {1, 1, 1} };
-
-    start_time = std::chrono::high_resolution_clock::now();
-    aplicarFiltro_x86(imagen_original, imagen_resultado, iteraciones_totales, kernelData2);
-    end_time = std::chrono::high_resolution_clock::now();
-    elapsed_time = end_time - start_time;
-
-    std::cout << "Tiempo para el segundo filtro: " << elapsed_time.count() << " segundos" << std::endl;
-
-    // Guardar la imagen desenfocada
-    guardarImagen("imagen_suavizado.jpg", imagen_resultado);
-
-    //----------------------------------------------
-
-    iteraciones_totales = 1;
-    int kernelData3[3][3] = { {0, 1, 0}, {1, -4, 1}, {0, 1, 0} };
-
-    start_time = std::chrono::high_resolution_clock::now();
-    aplicarFiltro_x86(imagen_original, imagen_resultado, iteraciones_totales, kernelData3);
-    end_time = std::chrono::high_resolution_clock::now();
-    elapsed_time = end_time - start_time;
-
-    std::cout << "Tiempo para el tercer filtro: " << elapsed_time.count() << " segundos" << std::endl;
-
-    // Guardar la imagen desenfocada
-    guardarImagen("imagen_deteccionBordes.jpg", imagen_resultado);
-
-    //----------------------------------------------
-
-    iteraciones_totales = 1;
-    int kernelData4 [3][3] = { {-2, -1, 0}, {-1, 1, 1}, {0, 1, 2}};
-
-    start_time = std::chrono::high_resolution_clock::now();
-    aplicarFiltro_x86(imagen_original, imagen_resultado, iteraciones_totales, kernelData4);
-    end_time = std::chrono::high_resolution_clock::now();
-    auto end_totalTime = std::chrono::high_resolution_clock::now();
-
-    elapsed_time = end_time - start_time;
-    std::cout << "Tiempo para el cuarto filtro: " << elapsed_time.count() << " segundos" << std::endl;
-
-    std::chrono::duration<double> elapsed_totalTime = end_totalTime - start_totalTime;
-    std::cout << "Tiempo total: " << elapsed_totalTime.count() << " segundos" << std::endl;
-
-    // Guardar la imagen desenfocada
-    guardarImagen("imagen_repujada.jpg", imagen_resultado);
-    */
-
-
-
-    // Liberar memoria
-    for (int i = 0; i < altura; i++) {
-        delete[] imagen_original[i];
-        delete[] imagen_resultado[i];
+    // Free memory
+    for (int i = 0; i < height; i++) {
+        delete[] originalImage[i];
+        delete[] resultImage[i];
     }
-    delete[] imagen_original;
-    delete[] imagen_resultado;
+    delete[] originalImage;
+    delete[] resultImage;
+    
 
     return 0;
 }
