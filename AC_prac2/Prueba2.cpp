@@ -343,7 +343,7 @@ int main() {
     //-------------------------------------------
 
     startTime = std::chrono::high_resolution_clock::now();
-    applyFilter(originalImage, resultImage, SINGLE_ITERATION, kernelData2);
+    applyFilter(originalImage, resultImage, SMOOTHING_ITERATIONS, kernelData2);
     endTime = std::chrono::high_resolution_clock::now();
     elapsedTime = endTime - startTime;
 
@@ -399,6 +399,7 @@ int main() {
             temp[i][j] = originalImage[i][j];
         }
     }
+
 
     // Apply the filter with the specified number of iterations
     for (int iteration = 0; iteration < BLUR_ITERATIONS; iteration++) {
