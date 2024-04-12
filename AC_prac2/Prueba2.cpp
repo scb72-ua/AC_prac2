@@ -7,6 +7,7 @@ int width;
 
 const int BLUR_ITERATIONS = 40;
 const int SINGLE_ITERATION = 1;
+const int SMOOTHING_ITERATIONS = 20;
 const unsigned KERNEL_MASK_SSE[4] = { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0 };
 
 int kernelData1[3][3] = { {1, 1, 1}, {1, 1, 1}, {1, 1, 1} }; // BLUR
@@ -388,7 +389,6 @@ int main() {
     startTime = std::chrono::high_resolution_clock::now();
 
 
-
     // FIRST FILTER
 
 
@@ -518,7 +518,7 @@ int main() {
     }
 
     // Apply the filter with the specified number of iterations
-    for (int iteration = 0; iteration < SINGLE_ITERATION; iteration++) {
+    for (int iteration = 0; iteration < SMOOTHING_ITERATIONS; iteration++) {
         int row = 1, col = 1, k_row = 0, k_col = 0, sum = 0;
 
         __asm {
@@ -1001,7 +1001,7 @@ int main() {
         }
     }
 
-    for (int iteration = 0; iteration < SINGLE_ITERATION; iteration++) {
+    for (int iteration = 0; iteration < SMOOTHING_ITERATIONS; iteration++) {
         int sum = 0, kernelRow = 0, row = 1, col = 1, iterableHeight = height - 1, iterableWidth = width - 1;
 
         __asm {
